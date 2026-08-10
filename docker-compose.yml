@@ -1,0 +1,37 @@
+version: '3.9'
+
+services:
+  postgres :
+    image : postgres:16-alpine
+    container_name : postgres
+    restart : unless-stopped 
+    environment :
+      POSTGRES_USER: db_user
+      POSTGRES_PASSWORD : db_password
+      POSTGRES_DB : db
+    ports :
+      - "5432:5432"
+    volumes: 
+      - pgdata:/var/lib/postgresql/data
+    networks :
+      - backend
+  
+  redis : 
+    image: redis:7-alpine
+    container_name: redis
+    restart : unless-stopped
+    command: redis-server --appendonly yes --requirepass redispassword
+    ports:
+     - "6379:6379"
+    volumes:
+      - redisdata:/data
+    networks :
+      - backend
+
+volumes:
+  pgdata:
+  redisdata:
+
+networks:
+  backend:
+    driver: bridge
