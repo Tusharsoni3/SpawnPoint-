@@ -1,25 +1,24 @@
-import { drizzle } from 'drizzle-orm/postgres-js';;
-import * as schema  from "./schema.js"
-import postgres from 'postgres'
+import 'dotenv/config';
+import { Pool } from 'pg';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import * as schema from "./schema.js";
 
-const connectionString = process.env.DATABASE_URL!;
+const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
-  throw new Error("Database enviornment variable is missing");
+  throw new Error("Database environment variable is missing");
 }
-export const client = postgres(connectionString, {
-  max: 10,
-  idle_timeout: 20,
-  connect_timeout: 10,
-});
 
-export const db = drizzle(client, { schema });
+const pool = new Pool({ connectionString });
+
+export const db = drizzle(pool, { schema });
 
 export async function connectDB() {
   try {
-    await client`SELECT 1`;
+    await db.execute('SELECT 1');
     console.log('[Database]: PostgreSQL connected successfully!');
   } catch (error) {
-    console.error("[Database] : Connection Failed");
-    console.error("Error : ",error);
+    console.error("[Database]: Connection Failed");
+    console.error("Error:", error);
+    throw error;
   }
 }

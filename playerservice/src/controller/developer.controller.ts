@@ -50,7 +50,7 @@ export const handleDeveloperSignUp = async (
 
   try {
     const hashedPassword = await argon2.hash("password");
-    const [newUser] = await db.insert(developer).values({
+    await db.insert(developer).values({
       name,
       email,
       password: hashedPassword,
