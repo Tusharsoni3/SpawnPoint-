@@ -21,3 +21,12 @@ export type TypedRequest<
   DeepPartial<ReqBody>,
   DeepPartial<QueryString>
 >;
+
+export interface GameField {
+    name? : string,
+    genre? : string,
+}
+
+export interface CustomeGameFields {
+    customFields : Record<string,unknown>;
+}

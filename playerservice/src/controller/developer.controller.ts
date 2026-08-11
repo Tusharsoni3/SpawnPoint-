@@ -7,14 +7,13 @@ import type {
 } from "../types/types.js";
 import StatusCodes from "http-status-codes";
 import { db } from "../db/index.js";
-import { eq } from "drizzle-orm";
+import { eq, name } from "drizzle-orm";
 import * as argon2 from "argon2";
-import { randomInt } from "crypto";
 import jwt from "jsonwebtoken";
 
 const JWT_SECRET = process.env.JWT_SECRET!;
 
-const generateTokenAndSetToken = (res: Response, userId: number) => {
+export const generateTokenAndSetToken = (res: Response, userId: string) => {
   const token = jwt.sign({ id: userId }, JWT_SECRET, {
     expiresIn: "7d",
   });
@@ -49,7 +48,7 @@ export const handleDeveloperSignUp = async (
   }
 
   try {
-    const hashedPassword = await argon2.hash("password");
+    const hashedPassword = await argon2.hash(password);
     await db.insert(developer).values({
       name,
       email,
@@ -57,7 +56,7 @@ export const handleDeveloperSignUp = async (
     });
 
     return res.status(StatusCodes.CREATED).json({
-      message: "New user registered",
+      message: "New dev registered",
     });
   } catch (error) {
     res.status(StatusCodes.INTERNAL_SERVER_ERROR);
@@ -74,29 +73,45 @@ export const handleDeveloperLogin = async (
       message: "Email and Password both are required",
     });
   }
-  const [user] = await db
-    .select()
+
+
+  try {
+      const [dev] = await db
+    .select({
+      id: developer.id,
+      email: developer.email,
+      password: developer.password,
+    })
     .from(developer)
     .where(eq(developer.email, email))
     .limit(1);
-  if (!user) {
+  if (!dev) {
     return res
       .status(StatusCodes.UNAUTHORIZED)
       .json({ message: "Wrong Credentials" });
   }
-  try {
-    const checkPassword = await argon2.verify(user.password, password);
+    const checkPassword = await argon2.verify(dev.password, password);
     if (!checkPassword) {
       return res.status(StatusCodes.UNAUTHORIZED).json({
         message: "Wrong Credentials",
       });
     }
+    generateTokenAndSetToken(res,dev.id)
+
+     return res.status(StatusCodes.OK).json({
+      message: "Login successful",
+      dev : { id: dev.id, email: dev.email },
+    });
+
   } catch (error) {
-    res.status(StatusCodes.INTERNAL_SERVER_ERROR);
+      console.error("Password verification error:", error);
+  return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+    message: "Something went wrong, please try again",
+  });
   }
 };
 
-export const logout = async (req : Request, res : Response) => {
+export const logout = async (req: Request, res: Response) => {
   try {
     res.clearCookie("jwt", {
       httpOnly: true,
@@ -104,7 +119,7 @@ export const logout = async (req : Request, res : Response) => {
     });
     return res
       .status(StatusCodes.NO_CONTENT)
-      .json({message: "Logged out successfully" });
+      .json({ message: "Logged out successfully" });
   } catch (error) {
     console.error("logout error:", error);
     return res
