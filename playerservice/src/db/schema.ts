@@ -41,21 +41,21 @@ export const players = pgTable(
   "players",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    name: text("name").unique().notNull(),
-    email: text("email").notNull(),
-    password: text("password").notNull(),
-    elo: integer("elo"),
-    customField: jsonb("customfields").default({}),
-    lastActive: timestamp("lastActive").defaultNow(),
-    createdAt: timestamp("createdAt").defaultNow(),
-    gameId: uuid("gameId")
+    playerId: text("player_id").notNull(),        // developer's own ID
+    displayName: text("display_name").notNull(),   // shown in game
+    gameId: uuid("game_id")
       .notNull()
       .references(() => games.id, { onDelete: "cascade" }),
+    elo: integer("elo").notNull().default(1200),
+    customData: jsonb("custom_data").default({}),
+    lastActiveAt: timestamp("last_active_at").defaultNow(),
+    createdAt: timestamp("created_at").defaultNow(),
   },
   (table) => ({
-    uniqueEmailPerGame: unique("unique_email_per_game").on(
-      table.email,
-      table.gameId,
+    // Same player cannot exist twice in same game
+    uniquePlayerPerGame: unique("unique_player_per_game").on(
+      table.playerId,
+      table.gameId
     ),
-  }),
-);
+  })
+)

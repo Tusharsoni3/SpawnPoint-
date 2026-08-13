@@ -9,8 +9,6 @@ import { db } from "../db/index.js";
 import { eq, and, name } from "drizzle-orm";
 import { StatusCodes } from "http-status-codes";
 import crypto from "crypto";
-import { PgUUID } from "drizzle-orm/pg-core";
-import { string } from "zod";
 
 const generateApiKey = (): string => {
   const randomBytes = crypto.randomBytes(32).toString("hex");
@@ -309,7 +307,7 @@ export const getPlayers = async (req: Request, res: Response) => {
     const gamePlayers = await db
       .select({
         id: players.id,
-        name: players.name,
+        name: players.displayName,
         elo: players.elo,
       })
       .from(players)

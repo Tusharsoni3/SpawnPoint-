@@ -30,3 +30,8 @@ export interface GameField {
 export interface CustomeGameFields {
     customFields : Record<string,unknown>;
 }
+
+export interface playerRequest {
+    playerId? : string,
+    displayName? : string,
+}
