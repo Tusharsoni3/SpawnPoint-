@@ -5,16 +5,6 @@ import { games } from "../db/schema.js";
 import { redis } from "../redis/config.js";
 import { db } from "../db/index.js";
 
-declare global {
-  namespace Express {
-    interface Request {
-      gameId?: string;
-      developerId?: string;
-    }
-  }
-}
-
-
 const checkValidApiKey = async (apiKey: string) => {
   if (!apiKey) return null;
 

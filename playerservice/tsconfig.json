@@ -9,7 +9,7 @@
     "moduleResolution": "nodenext",
     "target": "esnext",
     "esModuleInterop": true,
-
+   
     // Outputs
     "sourceMap": true,
     "declaration": true,

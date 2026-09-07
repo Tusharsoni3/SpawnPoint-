@@ -37,6 +37,25 @@ export const loginSchema = z.object({
     }),
 });
 
+export const playerResgisterSchema = z.object({
+  playerId :z.string().nonempty("PlayerId is required") ,
+  displayName: z.string().trim().min(1, "Name is required"),
+  email: z.email("Invalid email").nonempty("Email is required"),
+  password: z
+    .string()
+    .min(8, { message: "Password must be at least 8 characters" })
+    .refine((val) => /[A-Z]/.test(val), {
+      message: "Needs one uppercase letter",
+    })
+    .refine((val) => /[a-z]/.test(val), {
+      message: "Needs one lowercase letter",
+    })
+    .refine((val) => /[0-9]/.test(val), { message: "Needs one number" })
+    .refine((val) => /[^A-Za-z0-9]/.test(val), {
+      message: "Needs one special character",
+    }),
+});
+
 export function validateBody(schema: ZodSchema) {
   return (req: Request, res: Response, next: NextFunction) => {
     const parsed = schema.safeParse(req.body);
@@ -53,5 +72,7 @@ export function validateBody(schema: ZodSchema) {
   };
 }
 
+
 export const validateSignUp = validateBody(registerSchema);
 export const validateLogin = validateBody(loginSchema);
+export const validatePlayerResigterSchema = validateBody(playerResgisterSchema);
