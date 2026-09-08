@@ -1,29 +1,19 @@
 import { StatusCodes } from "http-status-codes";
-import type { Response, NextFunction } from "express";
+import type { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { redis } from "../redis/config.js";
-import type { TypedRequest } from "../types/types.js";
-
-interface GameScopedRequest {
-  gameId: string;
-}
 
 interface JwtPayload {
   playerId: string;
   gameId: string;
 }
 
-export interface PlayerAuthedRequest extends  GameScopedRequest {
-  playerId: string;
-}
-
 export const authPlayer = async (
-  req: TypedRequest<unknown> & GameScopedRequest,
+  req: Request,
   res: Response,
   next: NextFunction,
 ) => {
   if (!req.gameId) {
-
     console.error("authPlayer: req.gameId is missing — check middleware order");
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       message: "Internal server error",
@@ -48,8 +38,6 @@ export const authPlayer = async (
     });
   }
 
-  // A token minted for one game should never authenticate against a
-  // different game's API key, even if the signature checks out.
   if (payload.gameId !== req.gameId) {
     return res.status(StatusCodes.UNAUTHORIZED).json({
       message: "Token does not belong to this game.",
@@ -72,6 +60,6 @@ export const authPlayer = async (
     });
   }
 
-  (req as PlayerAuthedRequest).playerId = payload.playerId;
+  req.playerId = payload.playerId;
   next();
 };

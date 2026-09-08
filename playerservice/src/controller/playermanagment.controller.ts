@@ -5,10 +5,9 @@ import jwt from "jsonwebtoken";
 import { eq, and, desc } from "drizzle-orm";
 import { redis } from "../redis/config.js";
 import { db } from "../db/index.js";
-import { players, matches , matchParticipants} from "../db/schema.js";
+import { players, matches, matchParticipants } from "../db/schema.js";
 import type { TypedRequest } from "../types/types.js";
 import { sql } from "drizzle-orm";
-import { string } from "zod";
 
 const SALT_ROUNDS = 10;
 const SESSION_TTL_SECONDS = 60 * 60 * 24;
@@ -30,14 +29,10 @@ interface LoginBody {
   password: string;
 }
 
-type SignupRequest = TypedRequest<SignupBody> & GameScopedRequest;
-type LoginRequest = TypedRequest<LoginBody> & GameScopedRequest;
-
 interface JwtPayload {
   playerId: string;
   gameId: string;
 }
-
 
 function sanitizePlayer(player: typeof players.$inferSelect) {
   const { password: _password, ...safe } = player;
@@ -49,9 +44,9 @@ function issueToken(playerId: string, gameId: string) {
   return jwt.sign(payload, process.env.JWT_SECRET!, { expiresIn: "24h" });
 }
 
-/ ---------------- SIGNUP ---------------- /
-export const signupPlayer = async (req: SignupRequest, res: Response) => {
-  const { playerId, displayName, email, password } = req.body;
+/ ---------------- SIGNUP ---------------- /;
+export const signupPlayer = async (req: Request, res: Response) => {
+  const { playerId, displayName, email, password } = req.body as SignupBody;
   const gameId = req.gameId;
 
   if (!playerId || !displayName || !email || !password || !gameId) {
@@ -135,9 +130,9 @@ export const signupPlayer = async (req: SignupRequest, res: Response) => {
   }
 };
 
-/ ---------------- LOGIN ---------------- /
-export const loginPlayer = async (req: LoginRequest, res: Response) => {
-  const { email, password } = req.body;
+/ ---------------- LOGIN ---------------- /;
+export const loginPlayer = async (req: Request, res: Response) => {
+  const { email, password } = req.body as LoginBody;
   const gameId = req.gameId;
 
   if (!email || !password || !gameId) {
@@ -214,11 +209,8 @@ export const loginPlayer = async (req: LoginRequest, res: Response) => {
   }
 };
 
-/ ---------------- LOGOUT ---------------- /
-export const logoutPlayer = async (
-  req: TypedRequest<unknown>,
-  res: Response,
-) => {
+/ ---------------- LOGOUT ---------------- /;
+export const logoutPlayer = async (req: Request, res: Response) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith("Bearer ")
     ? authHeader.slice(7)
@@ -258,7 +250,7 @@ export const logoutPlayer = async (
   }
 };
 
-/----------------- Get player Information ---------/
+/----------------- Get player Information ---------/;
 export const getPlayerInfo = async (req: Request, res: Response) => {
   try {
     const playerTextId: any = req.playerId;
@@ -267,7 +259,9 @@ export const getPlayerInfo = async (req: Request, res: Response) => {
     const [player] = await db
       .select()
       .from(players)
-      .where(and(eq(players.playerId, playerTextId), eq(players.gameId, gameId)))
+      .where(
+        and(eq(players.playerId, playerTextId), eq(players.gameId, gameId)),
+      )
       .limit(1);
 
     if (!player) {

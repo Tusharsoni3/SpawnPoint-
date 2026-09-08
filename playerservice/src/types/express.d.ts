@@ -10,6 +10,9 @@ declare global {
             gameId?: string
             developerId?: string
             playerId?: string
+            displayName?: string
+            email?: string
+            password?:string
             user?: AuthTokenPayload;
         }
     }
