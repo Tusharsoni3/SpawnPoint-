@@ -56,6 +56,11 @@ export const playerResgisterSchema = z.object({
     }),
 });
 
+export const  gameRegisterSchema = z.object({
+  name : z.string().nonempty("Game name is required"),
+  genre : z.string().nonempty("Game genre is required ")
+}) 
+
 export function validateBody(schema: ZodSchema) {
   return (req: Request, res: Response, next: NextFunction) => {
     const parsed = schema.safeParse(req.body);
@@ -76,3 +81,4 @@ export function validateBody(schema: ZodSchema) {
 export const validateSignUp = validateBody(registerSchema);
 export const validateLogin = validateBody(loginSchema);
 export const validatePlayerResigterSchema = validateBody(playerResgisterSchema);
+export const validateGameRegisterScehma = validateBody(gameRegisterSchema); 

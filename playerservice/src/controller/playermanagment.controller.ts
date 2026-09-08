@@ -5,8 +5,10 @@ import jwt from "jsonwebtoken";
 import { eq, and, desc } from "drizzle-orm";
 import { redis } from "../redis/config.js";
 import { db } from "../db/index.js";
-import { players, matches } from "../db/schema.js";
+import { players, matches , matchParticipants} from "../db/schema.js";
 import type { TypedRequest } from "../types/types.js";
+import { sql } from "drizzle-orm";
+import { string } from "zod";
 
 const SALT_ROUNDS = 10;
 const SESSION_TTL_SECONDS = 60 * 60 * 24;
@@ -36,7 +38,7 @@ interface JwtPayload {
   gameId: string;
 }
 
-/** Strip the password hash before ever sending a player back to a client. */
+
 function sanitizePlayer(player: typeof players.$inferSelect) {
   const { password: _password, ...safe } = player;
   return safe;
@@ -255,16 +257,17 @@ export const logoutPlayer = async (
     });
   }
 };
+
 /----------------- Get player Information ---------/
 export const getPlayerInfo = async (req: Request, res: Response) => {
   try {
-    const playerId: any = req.playerId;
+    const playerTextId: any = req.playerId;
     const gameId: any = req.gameId;
 
     const [player] = await db
       .select()
       .from(players)
-      .where(and(eq(players.playerId, playerId), eq(players.gameId, gameId)))
+      .where(and(eq(players.playerId, playerTextId), eq(players.gameId, gameId)))
       .limit(1);
 
     if (!player) {
@@ -272,22 +275,95 @@ export const getPlayerInfo = async (req: Request, res: Response) => {
         message: "Player not found",
       });
     }
-    const matcheInfo = await db
-      .select()
-      .from(matches)
+
+    const [totalMatchesResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(matchParticipants)
+      .innerJoin(matches, eq(matches.id, matchParticipants.matchId))
       .where(
         and(
-          eq(matches.playerId, playerId),
+          eq(matchParticipants.playerId, player.id),
           eq(matches.gameId, gameId),
           eq(matches.status, "completed"),
         ),
-      )
-      .orderBy(desc(matches.createdAt));
+      );
 
-    const totalMatches = matcheInfo.length;
-    const totalWins = matcheInfo.filter(m => m.winnerId === playerId).length;
+    const [totalWinsResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(matches)
+      .where(
+        and(
+          eq(matches.gameId, gameId),
+          eq(matches.status, "completed"),
+          eq(matches.winnerId, player.id),
+        ),
+      );
+
+    const totalMatches = Number(totalMatchesResult?.count) || 0;
+    const totalWins = Number(totalWinsResult?.count) || 0;
     const totalLosses = totalMatches - totalWins;
 
+    const recentMatchesResult = await db.execute<{
+      id: string;
+      status: string;
+      result: string | null;
+      winner_id: string | null;
+      started_at: Date | null;
+      ended_at: Date | null;
+      created_at: Date | null;
+      participants: Array<{
+        playerId: string;
+        displayName: string;
+        team: number | null;
+        eloChange: number | null;
+      }>;
+    }>(
+      sql`
+        SELECT 
+          m.id,
+          m.status,
+          m.result,
+          m.winner_id,
+          m.started_at,
+          m.ended_at,
+          m.created_at,
+          COALESCE(
+            json_agg(
+              json_build_object(
+                'playerId', p.player_id,
+                'displayName', p.display_name,
+                'team', mp.team,
+                'eloChange', mp.elo_change  
+              )
+            ) FILTER (WHERE mp.player_id IS NOT NULL),
+            '[]'
+          ) as participants
+        FROM matches m
+        INNER JOIN match_participants mp ON m.id = mp.match_id
+        INNER JOIN players p ON mp.player_id = p.id
+        WHERE m.game_id = ${gameId}
+          AND m.status = 'completed'
+          AND mp.player_id = ${player.id}
+        GROUP BY m.id
+        ORDER BY m.created_at DESC
+        LIMIT 20
+      `,
+    );
+
+    const recentMatches = recentMatchesResult.rows;
+
+    const formattedMatches = recentMatches.map((match) => {
+      // Find this player's entry in the participants array
+      const myParticipant = match.participants.find(
+        (p) => p.playerId === player.playerId,
+      );
+
+      return {
+        ...match,
+        didPlayerWin: match.winner_id === player.id,
+        eloChange: myParticipant?.eloChange ?? 0,
+      };
+    });
 
     return res.status(StatusCodes.OK).json({
       player: {
@@ -298,14 +374,13 @@ export const getPlayerInfo = async (req: Request, res: Response) => {
         createdAt: player.createdAt,
         lastActiveAt: player.lastActiveAt,
       },
-      Stats : {
+      stats: {
         totalMatches,
         totalWins,
         totalLosses,
+        winRate: totalMatches > 0 ? (totalWins / totalMatches) * 100 : 0,
       },
-      // matches : {
-        // this section will be written accroding to the needes 
-      // }
+      recentMatches: formattedMatches,
     });
   } catch (error) {
     console.error("Error in getPlayerInfo:", error);

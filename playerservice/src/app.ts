@@ -17,7 +17,7 @@ connectDB();
 app.get('/', (req: Request, res: Response) => {
   res.json({ message: 'Hello World' });
 });
-app.use("/dev/",devRoute);
+app.use("/api/",devRoute);
 
 app.listen(PORT, () => {
     try {

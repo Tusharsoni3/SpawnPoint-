@@ -9,16 +9,6 @@ export interface AuthTokenPayload {
 
 const JWT_SECRET : string = process.env.JWT_SECRET!;
 
-
-// Extend Express's Request type so req.user is typed everywhere it's used
-declare global {
-  namespace Express {
-    interface Request {
-      user?: AuthTokenPayload;
-    }
-  }
-}
-
 export const authMiddleware = async (
   req: Request,
   res: Response,

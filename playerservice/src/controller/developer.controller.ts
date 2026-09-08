@@ -1,4 +1,4 @@
-import { developer } from "../db/schema.js";
+import { developers } from "../db/schema.js";
 import type { Request, Response, CookieOptions } from "express";
 import type {
   SignUpCredentials,
@@ -26,7 +26,7 @@ export const generateTokenAndSetToken = (res: Response, userId: string) => {
   return token;
 };
 
-export const handleDeveloperSignUp = async (
+export const developerSignUp = async (
   req: TypedRequest<SignUpCredentials>,
   res: Response,
 ) => {
@@ -38,8 +38,8 @@ export const handleDeveloperSignUp = async (
   }
   const [checkDeveloperEmailExist] = await db
     .select()
-    .from(developer)
-    .where(eq(developer.email, email))
+    .from(developers)
+    .where(eq(developers.email, email))
     .limit(1);
   if (checkDeveloperEmailExist) {
     return res.status(StatusCodes.CONFLICT).json({
@@ -49,7 +49,7 @@ export const handleDeveloperSignUp = async (
 
   try {
     const hashedPassword = await argon2.hash(password);
-    await db.insert(developer).values({
+    await db.insert(developers).values({
       name,
       email,
       password: hashedPassword,
@@ -63,7 +63,7 @@ export const handleDeveloperSignUp = async (
   }
 };
 
-export const handleDeveloperLogin = async (
+export const developerLogin = async (
   req: TypedRequest<LoginCredentials>,
   res: Response,
 ) => {
@@ -78,12 +78,12 @@ export const handleDeveloperLogin = async (
   try {
       const [dev] = await db
     .select({
-      id: developer.id,
-      email: developer.email,
-      password: developer.password,
+      id: developers.id,
+      email: developers.email,
+      password: developers.password,
     })
-    .from(developer)
-    .where(eq(developer.email, email))
+    .from(developers)
+    .where(eq(developers.email, email))
     .limit(1);
   if (!dev) {
     return res
@@ -111,7 +111,7 @@ export const handleDeveloperLogin = async (
   }
 };
 
-export const logout = async (req: Request, res: Response) => {
+export const developerLogout = async (req: Request, res: Response) => {
   try {
     res.clearCookie("jwt", {
       httpOnly: true,

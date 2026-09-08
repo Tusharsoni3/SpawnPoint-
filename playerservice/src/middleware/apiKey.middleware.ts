@@ -31,7 +31,6 @@ const checkValidApiKey = async (apiKey: string) => {
   return validKey;
 };
 
-
 export const apiKeyMiddleware = async (
   req: Request,
   res: Response,

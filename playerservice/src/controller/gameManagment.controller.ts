@@ -1,4 +1,4 @@
-import {  games ,players} from "../db/schema.js";
+import { games, players } from "../db/schema.js";
 import type { Request, Response } from "express";
 import type {
   CustomeGameFields,
@@ -6,7 +6,7 @@ import type {
   TypedRequest,
 } from "../types/types.js";
 import { db } from "../db/index.js";
-import { eq, and, name } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { StatusCodes } from "http-status-codes";
 import crypto from "crypto";
 
@@ -88,7 +88,7 @@ export const addCustomField = async (
       Array.isArray(customFields)
     ) {
       return res.status(StatusCodes.BAD_REQUEST).json({
-        message: "customFields must be a valid object",
+        message: "CustomFields must be a valid object",
       });
     }
     const [existingGame] = await db
@@ -282,8 +282,8 @@ export const changeActiveStatus = async (req: Request, res: Response) => {
 
 export const getPlayers = async (req: Request, res: Response) => {
   try {
-    const { gameId }  : any = req.params;
-    const developerId : any = req.user?.id;
+    const { gameId }: any = req.params;
+    const developerId: any = req.user?.id;
 
     if (!developerId) {
       return res.status(StatusCodes.UNAUTHORIZED).json({
@@ -324,4 +324,7 @@ export const getPlayers = async (req: Request, res: Response) => {
     });
   }
 };
+
+
+
 //completed

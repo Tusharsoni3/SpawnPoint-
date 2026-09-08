@@ -169,14 +169,9 @@ export const matchParticipants = pgTable(
     playerId: uuid("player_id")
       .notNull()
       .references(() => players.id, { onDelete: "cascade" }),
-    // Optional: track which team (if team-based games)
-    team: integer("team").default(0),
-    // Optional: snapshot of their ELO at match start
-    eloAtStart: integer("elo_at_start"),
     joinedAt: timestamp("joined_at").defaultNow(),
   },
   (table) => ({
-    // A player can only be in a match once
     uniquePlayerPerMatch: unique("unique_player_per_match").on(
       table.matchId,
       table.playerId,
