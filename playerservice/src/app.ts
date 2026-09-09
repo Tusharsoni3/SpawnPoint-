@@ -3,6 +3,7 @@ import express, { type Request, type Response } from 'express';
 import { connectDB } from './db/index.js';
 import cookieParser from 'cookie-parser';
 import devRoute from './routes/developer.routes.js';
+import playerRoute from './routes/player.routes.js';
 
 dotenv.config();
 
@@ -18,6 +19,8 @@ app.get('/', (req: Request, res: Response) => {
   res.json({ message: 'Hello World' });
 });
 app.use("/api/",devRoute);
+app.use("/api/",playerRoute);
+
 
 app.listen(PORT, () => {
     try {

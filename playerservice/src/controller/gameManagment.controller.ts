@@ -58,6 +58,8 @@ export const registerGame = async (
 
     return res.status(StatusCodes.CREATED).json({
       message: "Game registered successfully",
+      name ,
+      apiKey,
     });
   } catch (error) {
     console.error("Register Game Error:", error);
@@ -66,6 +68,34 @@ export const registerGame = async (
     });
   }
 };
+
+export const getApiKey = async (req : Request , res : Response) =>{
+  try {
+    const developerId : any = req.user?.id;
+    const {gameId}: any = req.params;
+
+    const [existingGame] = await db
+      .select()
+      .from(games)
+      .where(and(eq(games.id, gameId), eq(games.developerId, developerId)))
+      .limit(1);
+
+      if (!existingGame){
+        return res.status(StatusCodes.UNAUTHORIZED).json({
+        message: "Unauthorized: Credentials not found on request",
+      });
+      }
+      const apiKey  = existingGame.apiKey;
+      return res.status(StatusCodes.OK).json({
+      Apikey: apiKey,
+    });
+  } catch (error) {
+    console.error("Fetching Api key Error:", error);
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      message: "Internal server error",
+    });
+  }
+}
 
 export const addCustomField = async (
   req: TypedRequest<CustomeGameFields>,

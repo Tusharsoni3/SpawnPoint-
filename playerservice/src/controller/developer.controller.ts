@@ -99,8 +99,7 @@ export const developerLogin = async (
     generateTokenAndSetToken(res,dev.id)
 
      return res.status(StatusCodes.OK).json({
-      message: "Login successful",
-      dev : { id: dev.id, email: dev.email },
+      message: "Login successful"
     });
 
   } catch (error) {

@@ -10,3 +10,4 @@ playerRoute.post("/players/login",apiKeyMiddleware,validateLogin,loginPlayer);
 playerRoute.post("/players/logout",apiKeyMiddleware,authPlayer,logoutPlayer);
 playerRoute.get("/players/:playerId",apiKeyMiddleware,authPlayer,getPlayerInfo);
 
+export default playerRoute;
