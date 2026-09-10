@@ -59,21 +59,20 @@ export const players = pgTable(
   "players",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    playerId: text("player_id").notNull(),
     displayName: text("display_name").notNull(),
     email: text("email").unique().notNull(),
     password: text("password").notNull(), // Store hashed passwords only
     gameId: uuid("game_id")
       .notNull()
       .references(() => games.id, { onDelete: "cascade" }),
-    elo: integer("elo").notNull().default(1200),
+    elo: integer("elo").notNull().default(0),
     customData: jsonb("custom_data").default({}),
     lastActiveAt: timestamp("last_active_at").defaultNow(),
     createdAt: timestamp("created_at").defaultNow(),
   },
   (table) => ({
     uniquePlayerPerGame: unique("unique_player_per_game").on(
-      table.playerId,
+      table.email,
       table.gameId,
     ),
   }),
@@ -169,6 +168,8 @@ export const matchParticipants = pgTable(
     playerId: uuid("player_id")
       .notNull()
       .references(() => players.id, { onDelete: "cascade" }),
+    team: integer("team").default(0),       
+    eloChange: integer("elo_change"),  
     joinedAt: timestamp("joined_at").defaultNow(),
   },
   (table) => ({

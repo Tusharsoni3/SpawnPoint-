@@ -4,7 +4,7 @@ import jwt from "jsonwebtoken";
 import { redis } from "../redis/config.js";
 
 interface JwtPayload {
-  playerId: string;
+  sub: string;        // player UUID
   gameId: string;
 }
 
@@ -20,12 +20,16 @@ export const authPlayer = async (
     });
   }
 
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : undefined;
+  // Read token from cookie OR Authorization header
+  const token =
+    req.cookies?.playerToken ||
+    (req.headers.authorization?.startsWith("Bearer ")
+      ? req.headers.authorization.slice(7)
+      : undefined);
 
   if (!token) {
     return res.status(StatusCodes.UNAUTHORIZED).json({
-      message: "Missing bearer token.",
+      message: "Not authenticated. Please log in.",
     });
   }
 
@@ -45,7 +49,7 @@ export const authPlayer = async (
   }
 
   try {
-    const sessionKey = `session:${payload.playerId}:${payload.gameId}`;
+    const sessionKey = `session:${payload.sub}:${payload.gameId}`;
     const storedToken = await redis.get(sessionKey);
 
     if (!storedToken || storedToken !== token) {
@@ -60,6 +64,6 @@ export const authPlayer = async (
     });
   }
 
-  req.playerId = payload.playerId;
+  req.playerId = payload.sub;
   next();
 };

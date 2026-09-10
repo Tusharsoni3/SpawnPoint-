@@ -38,7 +38,6 @@ export const loginSchema = z.object({
 });
 
 export const playerResgisterSchema = z.object({
-  playerId :z.string().nonempty("PlayerId is required") ,
   displayName: z.string().trim().min(1, "Name is required"),
   email: z.email("Invalid email").nonempty("Email is required"),
   password: z

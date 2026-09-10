@@ -2,63 +2,58 @@ import { StatusCodes } from "http-status-codes";
 import type { Request, Response } from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { redis } from "../redis/config.js";
 import { db } from "../db/index.js";
 import { players, matches, matchParticipants } from "../db/schema.js";
-import type { TypedRequest } from "../types/types.js";
-import { sql } from "drizzle-orm";
 
 const SALT_ROUNDS = 10;
 const SESSION_TTL_SECONDS = 60 * 60 * 24;
 const LOCK_TTL_SECONDS = 5;
 
-interface GameScopedRequest {
-  gameId: string;
-}
-
-interface SignupBody {
-  playerId: string;
-  displayName: string;
-  email: string;
-  password: string;
-}
-
-interface LoginBody {
-  email: string;
-  password: string;
-}
+interface SignupBody { displayName: string; email: string; password: string; }
+interface LoginBody  { email: string; password: string; }
 
 interface JwtPayload {
-  playerId: string;
+  sub: string;     // player UUID
   gameId: string;
 }
 
 function sanitizePlayer(player: typeof players.$inferSelect) {
-  const { password: _password, ...safe } = player;
+  const { password: _p, ...safe } = player;
   return safe;
 }
 
-function issueToken(playerId: string, gameId: string) {
-  const payload: JwtPayload = { playerId, gameId };
+function issueToken(playerUuid: string, gameId: string) {
+  const payload: JwtPayload = { sub: playerUuid, gameId };
   return jwt.sign(payload, process.env.JWT_SECRET!, { expiresIn: "24h" });
 }
 
-/ ---------------- SIGNUP ---------------- /;
+function setSessionCookie(res: Response, token: string) {
+  res.cookie("playerToken", token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: SESSION_TTL_SECONDS * 1000,
+    path: "/",
+  });
+}
+
+// ---------------- SIGNUP ----------------//
+
 export const signupPlayer = async (req: Request, res: Response) => {
-  const { playerId, displayName, email, password } = req.body as SignupBody;
+  const { displayName, email, password } = req.body as SignupBody;
   const gameId = req.gameId;
 
-  if (!playerId || !displayName || !email || !password || !gameId) {
+  if (!displayName || !email || !password || !gameId) {
     return res.status(StatusCodes.BAD_REQUEST).json({
-      message:
-        "playerId, displayName, email, password, and gameId are required",
+      message: "displayName, email, password are required",
     });
   }
 
   const lockKey = `signup_lock:${gameId}:${email}`;
   const lock = await redis.set(lockKey, "1", "EX", LOCK_TTL_SECONDS, "NX");
-
   if (!lock) {
     return res.status(StatusCodes.TOO_MANY_REQUESTS).json({
       message: "Signup already in progress. Try again.",
@@ -66,59 +61,43 @@ export const signupPlayer = async (req: Request, res: Response) => {
   }
 
   try {
-    const [existingByEmail] = await db
+    const [existingPlayer] = await db
       .select()
       .from(players)
-      .where(eq(players.email, email))
+      .where(and(eq(players.email, email), eq(players.gameId, gameId)))
       .limit(1);
 
-    if (existingByEmail) {
+    if (existingPlayer) {
       return res.status(StatusCodes.CONFLICT).json({
-        message: "An account with this email already exists.",
-      });
-    }
-
-    const [existingInGame] = await db
-      .select()
-      .from(players)
-      .where(and(eq(players.playerId, playerId), eq(players.gameId, gameId)))
-      .limit(1);
-
-    if (existingInGame) {
-      return res.status(StatusCodes.CONFLICT).json({
-        message: "This playerId already exists for this game.",
+        message: "An account with this email already exists for this game.",
       });
     }
 
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
-    const [newPlayer]: any = await db
+    const [newPlayer] : any = await db
       .insert(players)
-      .values({
-        playerId,
-        displayName,
-        email,
-        password: passwordHash,
-        gameId,
-      })
+      .values({ displayName, email, password: passwordHash, gameId })
       .returning();
 
-    await redis.publish(
-      "player_created",
-      JSON.stringify({ playerId, gameId, displayName }),
-    );
-
-    const token = issueToken(newPlayer.playerId, gameId);
+    const token = issueToken(newPlayer.id, gameId);
     await redis.set(
-      `session:${newPlayer.playerId}:${gameId}`,
+      `session:${newPlayer.id}:${gameId}`,
       token,
       "EX",
       SESSION_TTL_SECONDS,
     );
 
+    setSessionCookie(res, token);
+
+    await redis.publish(
+      "player_created",
+      JSON.stringify({ playerId: newPlayer.id, gameId, displayName }),
+    );
+
     return res.status(StatusCodes.CREATED).json({
-      playerToken: token,
-      ...sanitizePlayer(newPlayer),
+      playerToken: token,           // for non-browser clients
+      player: sanitizePlayer(newPlayer),
     });
   } catch (error) {
     console.error("Error in signupPlayer:", error);
@@ -130,7 +109,7 @@ export const signupPlayer = async (req: Request, res: Response) => {
   }
 };
 
-/ ---------------- LOGIN ---------------- /;
+// ---------------- LOGIN ----------------//
 export const loginPlayer = async (req: Request, res: Response) => {
   const { email, password } = req.body as LoginBody;
   const gameId = req.gameId;
@@ -143,7 +122,6 @@ export const loginPlayer = async (req: Request, res: Response) => {
 
   const lockKey = `login_lock:${gameId}:${email}`;
   const lock = await redis.set(lockKey, "1", "EX", LOCK_TTL_SECONDS, "NX");
-
   if (!lock) {
     return res.status(StatusCodes.TOO_MANY_REQUESTS).json({
       message: "Login already in progress. Try again.",
@@ -157,47 +135,38 @@ export const loginPlayer = async (req: Request, res: Response) => {
       .where(and(eq(players.email, email), eq(players.gameId, gameId)))
       .limit(1);
 
-    // Same message for "no such player" and "wrong password" on purpose —
-    // don't leak which one it was.
     if (!existingPlayer) {
       return res.status(StatusCodes.UNAUTHORIZED).json({
         message: "Invalid email or password.",
       });
     }
 
-    const passwordMatches = await bcrypt.compare(
-      password,
-      existingPlayer.password,
-    );
-
-    if (!passwordMatches) {
+    const ok = await bcrypt.compare(password, existingPlayer.password);
+    if (!ok) {
       return res.status(StatusCodes.UNAUTHORIZED).json({
         message: "Invalid email or password.",
       });
     }
 
-    const [updatedPlayer]: any = await db
+    const [updatedPlayer] : any = await db
       .update(players)
       .set({ lastActiveAt: new Date() })
-      .where(
-        and(
-          eq(players.playerId, existingPlayer.playerId),
-          eq(players.gameId, gameId),
-        ),
-      )
+      .where(eq(players.id, existingPlayer.id))
       .returning();
 
-    const token = issueToken(updatedPlayer.playerId, gameId);
+    const token = issueToken(updatedPlayer.id, gameId);
     await redis.set(
-      `session:${updatedPlayer.playerId}:${gameId}`,
+      `session:${updatedPlayer.id}:${gameId}`,
       token,
       "EX",
       SESSION_TTL_SECONDS,
     );
 
+    setSessionCookie(res, token);
+
     return res.status(StatusCodes.OK).json({
       playerToken: token,
-      ...sanitizePlayer(updatedPlayer),
+      player: sanitizePlayer(updatedPlayer),
     });
   } catch (error) {
     console.error("Error in loginPlayer:", error);
@@ -209,16 +178,17 @@ export const loginPlayer = async (req: Request, res: Response) => {
   }
 };
 
-/ ---------------- LOGOUT ---------------- /;
+// ---------------- LOGOUT ----------------
 export const logoutPlayer = async (req: Request, res: Response) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith("Bearer ")
-    ? authHeader.slice(7)
-    : undefined;
+  const token =
+    req.cookies?.playerToken ||
+    (req.headers.authorization?.startsWith("Bearer ")
+      ? req.headers.authorization.slice(7)
+      : undefined);
 
   if (!token) {
     return res.status(StatusCodes.BAD_REQUEST).json({
-      message: "Authorization bearer token is required to log out.",
+      message: "No token provided.",
     });
   }
 
@@ -232,14 +202,13 @@ export const logoutPlayer = async (req: Request, res: Response) => {
   }
 
   try {
-    const sessionKey = `session:${payload.playerId}:${payload.gameId}`;
+    const sessionKey = `session:${payload.sub}:${payload.gameId}`;
     const storedToken = await redis.get(sessionKey);
-
-    // Only clear the session if it matches the presented token, so a stale
-    // token can't be used to kill a newer, still-valid session.
     if (storedToken === token) {
       await redis.del(sessionKey);
     }
+
+    res.clearCookie("playerToken", { path: "/" });
 
     return res.status(StatusCodes.OK).json({ message: "Logged out." });
   } catch (error) {
@@ -250,7 +219,7 @@ export const logoutPlayer = async (req: Request, res: Response) => {
   }
 };
 
-/----------------- Get player Information ---------/;
+// ----------------- Get player Information ---------
 export const getPlayerInfo = async (req: Request, res: Response) => {
   try {
     const playerTextId: any = req.playerId;
@@ -260,7 +229,7 @@ export const getPlayerInfo = async (req: Request, res: Response) => {
       .select()
       .from(players)
       .where(
-        and(eq(players.playerId, playerTextId), eq(players.gameId, gameId)),
+        and(eq(players.id, playerTextId), eq(players.gameId, gameId)),
       )
       .limit(1);
 
@@ -306,7 +275,7 @@ export const getPlayerInfo = async (req: Request, res: Response) => {
       ended_at: Date | null;
       created_at: Date | null;
       participants: Array<{
-        playerId: string;
+        id: string;
         displayName: string;
         team: number | null;
         eloChange: number | null;
@@ -324,7 +293,7 @@ export const getPlayerInfo = async (req: Request, res: Response) => {
           COALESCE(
             json_agg(
               json_build_object(
-                'playerId', p.player_id,
+                'id', p.id,
                 'displayName', p.display_name,
                 'team', mp.team,
                 'eloChange', mp.elo_change  
@@ -349,7 +318,7 @@ export const getPlayerInfo = async (req: Request, res: Response) => {
     const formattedMatches = recentMatches.map((match) => {
       // Find this player's entry in the participants array
       const myParticipant = match.participants.find(
-        (p) => p.playerId === player.playerId,
+        (p) => p.id === player.id,
       );
 
       return {
@@ -361,7 +330,7 @@ export const getPlayerInfo = async (req: Request, res: Response) => {
 
     return res.status(StatusCodes.OK).json({
       player: {
-        playerId: player.playerId,
+        id: player.id,
         displayName: player.displayName,
         elo: player.elo,
         customData: player.customData,
