@@ -4,6 +4,9 @@ import { connectDB } from './db/index.js';
 import cookieParser from 'cookie-parser';
 import devRoute from './routes/developer.routes.js';
 import playerRoute from './routes/player.routes.js';
+import friendRoute from './routes/friend.routes.js'
+import http from 'http';
+import { setupWebSockets } from './socket/index.js';
 
 dotenv.config();
 
@@ -15,12 +18,15 @@ app.use(cookieParser());
 
 connectDB();
 
+const server = http.createServer(app);
+setupWebSockets(server);
+
 app.get('/', (req: Request, res: Response) => {
   res.json({ message: 'Hello World' });
 });
 app.use("/api/",devRoute);
 app.use("/api/",playerRoute);
-
+app.use("/api/",friendRoute)
 
 app.listen(PORT, () => {
     try {
