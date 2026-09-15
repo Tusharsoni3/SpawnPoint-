@@ -132,7 +132,7 @@ export const handleFriendRequest = async (req: Request, res: Response) => {
     });
   }
 
-  // ✅ Map imperative API action → past-tense DB enum value
+  // Map imperative API action -> past-tense DB enum value
   const newStatus: "accepted" | "rejected" =
     action === "accept" ? "accepted" : "rejected";
 
@@ -159,7 +159,7 @@ export const handleFriendRequest = async (req: Request, res: Response) => {
         return { error: "ALREADY_HANDLED" as const };
       }
 
-      // ✅ Use mapped status
+      // Use mapped status
       await tx
         .update(friendRequests)
         .set({ status: newStatus, updatedAt: new Date() })
@@ -182,7 +182,7 @@ export const handleFriendRequest = async (req: Request, res: Response) => {
     });
 
     if ("error" in result) {
-      // ✅ `as const` on the map narrows values to `number`
+      // `as const` on the map narrows values to `number`
       const statusMap = {
         NOT_FOUND: StatusCodes.NOT_FOUND,
         FORBIDDEN: StatusCodes.FORBIDDEN,
